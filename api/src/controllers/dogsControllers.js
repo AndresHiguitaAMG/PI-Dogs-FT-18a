@@ -134,16 +134,17 @@ const postDogs = async(req, res, next) =>{
             name,
             height,
             weight,
-            life_span
+            life_span 
         })
 
         temperament.forEach(async el =>{
-            const temperaments = await Diet.findOrCreate({where:{name: el}})
-            await createDog.setDiets(temperaments[0].id)
-        })
-        return res.status(200).send("Successfully created")
+            const temperaments = await Temperament.findOne({where:{name: el}});
+            await createDog.setTemperaments(temperaments.dataValues.id);
+            // console.log(temperaments.dataValues.id);
+        });
+        res.status(200).send("Successfully created");
     }catch(error){
-        next(error)
+        res.status(200).send("Error"); 
     }
 }
 
