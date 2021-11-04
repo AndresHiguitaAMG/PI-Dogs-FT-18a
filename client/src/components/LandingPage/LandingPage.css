@@ -1,0 +1,28 @@
+.container{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-image: url("https://i.gifer.com/EoW2.gif");
+    background-size: cover;
+    background-repeat: no-repeat;
+}
+
+.logo{
+    width: 700px;
+    height: 300px;
+    animation-duration: 3s;
+    animation-name: logo;
+    animation-iteration-count: infinite;
+}
+
+@keyframes logo{
+    50%{
+        width: 700px;
+        height: 300px;
+    }
+    50%{
+        width: 600px;
+        height: 200px;
+    }
+}

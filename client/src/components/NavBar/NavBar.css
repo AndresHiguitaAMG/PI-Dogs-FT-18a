@@ -1,0 +1,7 @@
+.navBarContainer{
+    background-color: rgb(210, 224, 233);
+    height: 50px;
+    display: flex;
+    justify-content: left;
+    margin-bottom: 1rem;
+}
