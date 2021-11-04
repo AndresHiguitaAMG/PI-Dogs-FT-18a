@@ -15,18 +15,26 @@ const getDogs = async(req, res, next) => {
         let allDogsDb
         let allData = []
         page = page ? page : 1;
-        const recipePerPage = 8;
+        const recipePerPage = 8; 
         //#region name
         if(name && name !== "") {
-            const allDogsApi = await axios.get(`https://api.thedogapi.com/v1/breeds/search?q=${name}&api_key${API_KEY}`);
-            myInfo = allDogsApi.data.map(el => {
+            const allDogsApi = await axios.get(`https://api.thedogapi.com/v1/breeds/search?q=${name}&api_key=${API_KEY}`);
+            myInfo = allDogsApi.data.filter(el => el.reference_image_id)
+            const img = myInfo.map(async el => {
+                return (await axios.get(`https://api.thedogapi.com/v1/images/${el.reference_image_id}`)).data
+            })
+            const response = await Promise.all(img)
+            myInfo = response.map(el => {
                 return {
-                    image: el.reference_image_id,
-                    name: el.name,
-                    temperament: el.temperament,
-                    weight: el.weight
+                    image: el.url,
+                    name: el.breeds[0].name,
+                    temperament: el.breeds[0].temperament,
+                    weight: el.breeds[0].weight,
+                    id: el.breeds[0].id
                 }
             })
+            console.log(response);
+
             allDogsDb = await Dog.findAll({
                 where: {
                     name: {
@@ -35,6 +43,7 @@ const getDogs = async(req, res, next) => {
                 }
             })
             allData = allDogsDb.concat(myInfo)
+            // console.log(allData);
         }else{
             const allDogsApi = await axios.get(`https://api.thedogapi.com/v1/breeds?api_key=${API_KEY}`);
             myInfo = allDogsApi.data.map(el => {
@@ -42,13 +51,14 @@ const getDogs = async(req, res, next) => {
                     image: el.image.url,
                     name: el.name,
                     temperament: el.temperament,
-                    weight: el.weight
-                }
+                    weight: el.weight,
+                    id: el.id
+                } 
             })
             // console.log(myInfo);
             allDogsDb = await Dog.findAll({include: [Temperament]})
             const dogsDb = allDogsDb.map(el =>{
-                const temperament = el.temperament.map(el => el.name)
+                const temperament = el.dataValues.temperaments.map(el => el.dataValues.name)
                 return {
                     image: null,
                     name: el.name,
@@ -86,47 +96,68 @@ const getDogs = async(req, res, next) => {
     }
 }
 
-const getDogsById = async(req, res, next) => {
-    const id = req.params.id;
-    if(id){
-        try{
-            if(!id.includes("-")){
-                const idByApi = await axios.get(`https://api.thedogapi.com/v1/breeds/${id}?api_key=${API_KEY}`);
-                const info = {
-                    image: idByApi.data.url,
-                    name: idByApi.data.name,
-                    temperament: idByApi.data.temperament,
-                    height: idByApi.data.height,
-                    weight: idByApi.data.weight,
-                    life_span: idByApi.data.life_span
-                }
-                res.json(info)
-            }else{
-                const dB = await Dog.findOne({
-                    where: {
-                        id: id
-                    },
-                    include: Temperament
-                })
-                const idByDb = {
-                    image: null,
-                    name: dB.name,
-                    temperament: dB.temperament,
-                    height: dB.height,
-                    weight: dB.weight,
-                    life_span: dB.life_span
-                }
-                if(!dB){
-                    return res.status(400).send({message: "It was not found"})
-                }
-                return res.json(idByDb)
+const responseByApi = async() => {
+    try {
+        const responseApi = await axios.get(`https://api.thedogapi.com/v1/breeds?api_key=${API_KEY}`);
+        const responseIdByApi = responseApi.data.map(el => {
+            return {
+                image: el.image.url,
+                id: el.id,
+                name: el.name,
+                temperament: el.temperament,
+                height: el.height,
+                weight: el.weight,
+                life_span: el.life_span
             }
-        }catch(error){
-           next(error); 
-        }
+        })
+        return responseIdByApi
+    }catch(error) {
+        console.log(error);
+    }
+} 
+
+const responseByDb = async() => {
+    try{
+        return await Dog.findAll({
+            include:{
+                model:Temperament,
+                attributes:['name'],
+                through:{
+                    attributes:[]
+                },
+            }
+        });
+    }catch(error){
+        console.log(error)
     }
 }
 
+const infoConnected = async() => {
+    try{
+        const infoApi = await responseByApi();
+        const infoDb = await responseByDb();
+        const infoTotal = infoApi.concat(infoDb);
+        return infoTotal
+    }catch(error){
+        console.log(error);   
+    }
+}
+
+const getDogsById = async(req, res, next) => {
+    try {
+        const { id } = req.params;
+        const infoMain = await infoConnected();
+        if(id){
+            let idByApi = infoMain.filter(el => el.id == (id));
+            idByApi.length ? 
+        res.status(200).send(idByApi) :
+        res.status(400).send({message: "It was not found"})
+        }
+    }catch(error) {
+        next(error);   
+    }
+}
+        
 const postDogs = async(req, res, next) =>{
     try{
         const { name, height, weight, life_span, temperament} = req.body;
@@ -137,7 +168,7 @@ const postDogs = async(req, res, next) =>{
             life_span 
         })
 
-        temperament.forEach(async el =>{
+        temperament.forEach(async el => {
             const temperaments = await Temperament.findOne({where:{name: el}});
             await createDog.setTemperaments(temperaments.dataValues.id);
             // console.log(temperaments.dataValues.id);
